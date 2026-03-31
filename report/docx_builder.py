@@ -21,11 +21,28 @@ class DDRReportBuilder:
     def add_paragraph(self, text):
         self.doc.add_paragraph(text)
 
+    # ✅ FIXED IMAGE HANDLER
     def add_images(self, image_list):
+
+        if not image_list:
+            self.doc.add_paragraph("Image Not Available")
+            return
+
         for img in image_list:
+
+            print("Trying to load image:", img)  # 🔍 debug
+
             if os.path.exists(img):
-                self.doc.add_picture(img, width=Inches(3))
+                print("✅ Found:", img)
+
+                try:
+                    self.doc.add_picture(img, width=Inches(3))
+                except Exception as e:
+                    print("❌ Error inserting image:", e)
+                    self.doc.add_paragraph("Image Not Available")
+
             else:
+                print("❌ Missing:", img)
                 self.doc.add_paragraph("Image Not Available")
 
     def build(self, output_path):
@@ -40,18 +57,20 @@ class DDRReportBuilder:
         for area in self.merged:
             self.doc.add_heading(area["area"], level=2)
 
-            # Issues
-            for issue in area["inspection_issues"]:
+            # Inspection Issues
+            for issue in area.get("inspection_issues", []):
                 self.add_paragraph(f"- {issue}")
 
-            # Thermal
-            for t in area["thermal_findings"]:
+            # Thermal Findings
+            for t in area.get("thermal_findings", []):
                 self.add_paragraph(
-                    f"Thermal: Hotspot {t['hotspot']}°C, Coldspot {t['coldspot']}°C (Severity: {t['severity']})"
+                    f"Thermal: Hotspot {t.get('hotspot', 'NA')}°C, "
+                    f"Coldspot {t.get('coldspot', 'NA')}°C "
+                    f"(Severity: {t.get('severity', 'NA')})"
                 )
 
             # Conflicts
-            for c in area["conflicts"]:
+            for c in area.get("conflicts", []):
                 self.add_paragraph(f"⚠ Conflict: {c}")
 
             # Images
@@ -85,9 +104,8 @@ class DDRReportBuilder:
         for item in self.llm.get("missing_or_unclear_information", []):
             self.add_paragraph(f"- {item}")
 
+        # Save file
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         self.doc.save(output_path)
-
-        print("Trying to load image:", img)
 
         print("✅ DOCX Report Generated")
