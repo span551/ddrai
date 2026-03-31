@@ -5,6 +5,7 @@ import os
 class ImageMapper:
 
     def __init__(self, merged_path, inspection_path, thermal_path):
+
         with open(merged_path) as f:
             self.merged = json.load(f)
 
@@ -14,63 +15,68 @@ class ImageMapper:
         with open(thermal_path) as f:
             self.thermal = json.load(f)
 
-    # 🔹 Hardcoded mapping (based on PDF)
-    def get_inspection_image_map(self):
+    # ✅ Distribute inspection images area-wise
+    def map_inspection_images(self):
 
-        images = self.inspection["images"]
+        images = self.inspection.get("images", [])
+        areas = self.merged
 
-        return {
-            "Hall": images[0:11],
-            "Bedroom": images[11:19],
-            "Master Bedroom": images[19:30],
-            "Kitchen": images[30:37],
-            "Master Bedroom Wall": images[37:48],
-            "Parking Area": images[48:57],
-            "Common Bathroom": images[57:64],
-        }
+        mapping = {area["area"]: [] for area in areas}
 
-    # 🔹 Map thermal images
-    def get_thermal_image_map(self, areas):
+        if not images:
+            return mapping
 
-        images = self.thermal["images"]
-        mapping = {area: [] for area in areas}
+        per_area = max(1, len(images) // len(areas))
 
-        for i, img in enumerate(images):
-            area = areas[i % len(areas)]
-            mapping[area].append(img)
+        for i, area in enumerate(areas):
+            start = i * per_area
+            end = (i + 1) * per_area if i < len(areas) - 1 else len(images)
+
+            mapping[area["area"]] = images[start:end]
+
+        return mapping
+
+    # ✅ Distribute thermal images area-wise
+    def map_thermal_images(self):
+
+        thermal_data = self.thermal.get("thermal_data", [])
+        areas = self.merged
+
+        mapping = {area["area"]: [] for area in areas}
+
+        if not thermal_data:
+            return mapping
+
+        per_area = max(1, len(thermal_data) // len(areas))
+
+        for i, area in enumerate(areas):
+            start = i * per_area
+            end = (i + 1) * per_area if i < len(areas) - 1 else len(thermal_data)
+
+            imgs = []
+            for item in thermal_data[start:end]:
+                if "image" in item:
+                    imgs.append(item["image"])
+
+            mapping[area["area"]] = imgs
 
         return mapping
 
     def run(self, output_path):
 
-        areas = [entry["area"] for entry in self.merged]
+        inspection_map = self.map_inspection_images()
+        thermal_map = self.map_thermal_images()
 
-        inspection_map = self.get_inspection_image_map()
-        thermal_map = self.get_thermal_image_map(areas)
+        # ✅ Attach images to merged data
+        for area in self.merged:
+            name = area["area"]
 
-        final_data = []
-
-        for entry in self.merged:
-
-            area = entry["area"]
-
-            entry["inspection_images"] = inspection_map.get(area, ["Image Not Available"])
-            entry["thermal_images"] = thermal_map.get(area, ["Image Not Available"])
-
-            # If empty → mark explicitly
-            if not entry["inspection_images"]:
-                entry["inspection_images"] = ["Image Not Available"]
-
-            if not entry["thermal_images"]:
-                entry["thermal_images"] = ["Image Not Available"]
-
-            final_data.append(entry)
+            area["inspection_images"] = inspection_map.get(name, [])
+            area["thermal_images"] = thermal_map.get(name, [])
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         with open(output_path, "w") as f:
-            json.dump(final_data, f, indent=4)
+            json.dump(self.merged, f, indent=4)
 
-        print("✅ Image mapping complete")
-
-        return final_data
+        print("✅ Image mapping completed")
