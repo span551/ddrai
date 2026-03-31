@@ -88,4 +88,6 @@ class DDRReportBuilder:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         self.doc.save(output_path)
 
+        print("Trying to load image:", img)
+
         print("✅ DOCX Report Generated")
