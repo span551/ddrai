@@ -8,33 +8,30 @@ class DDRGenerator:
     def __init__(self, api_key):
         self.client = Groq(api_key=api_key)
 
-        with open("llm/prompt_template.txt") as f:
+        # ✅ FIXED PATH HANDLING
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        prompt_path = os.path.join(base_dir, "prompt_template.txt")
+
+        with open(prompt_path, "r", encoding="utf-8") as f:
             self.prompt_template = f.read()
 
     def generate(self, merged_json_path, output_path):
 
-        
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-prompt_path = os.path.join(BASE_DIR, "prompt_template.txt")
-
-with open(prompt_path, "r", encoding="utf-8") as f:
-    self.prompt_template = f.read()
+        with open(merged_json_path) as f:
+            data = json.load(f)
 
         prompt = self.prompt_template.replace("{data}", json.dumps(data, indent=2))
 
         response = self.client.chat.completions.create(
-    model="llama-3.3-70b-versatile",
-    messages=[
-        {"role": "user", "content": prompt}
-    ],
-    temperature=0.2
-)
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2
+        )
 
         output_text = response.choices[0].message.content
 
-        # 🔴 Important: clean JSON safely
         try:
             start = output_text.find("{")
             end = output_text.rfind("}") + 1
