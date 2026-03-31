@@ -1,8 +1,8 @@
-
+import fitz
 import os
 from PIL import Image
 import io
-import pymupdf as fitz
+
 
 def is_valid_image(image_bytes):
 
