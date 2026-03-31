@@ -13,8 +13,14 @@ class DDRGenerator:
 
     def generate(self, merged_json_path, output_path):
 
-        with open(merged_json_path) as f:
-            data = json.load(f)
+        
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+prompt_path = os.path.join(BASE_DIR, "prompt_template.txt")
+
+with open(prompt_path, "r", encoding="utf-8") as f:
+    self.prompt_template = f.read()
 
         prompt = self.prompt_template.replace("{data}", json.dumps(data, indent=2))
 
