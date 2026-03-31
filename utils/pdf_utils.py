@@ -1,70 +1,62 @@
-import fitz
+import pdfplumber
 import os
 from PIL import Image
 import io
 
 
-def is_valid_image(image_bytes):
+def extract_text_by_page(pdf_path):
+    pages = []
 
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
+    with pdfplumber.open(pdf_path) as pdf:
+        for i, page in enumerate(pdf.pages):
+            text = page.extract_text() or ""
+            pages.append({
+                "page": i + 1,
+                "text": text
+            })
 
-        width, height = img.size
-
-        # ❌ Filter small icons/logos
-        if width < 200 or height < 200:
-            return False
-
-        # ❌ Filter very tiny file size
-        if len(image_bytes) < 5000:
-            return False
-
-        return True
-
-    except:
-        return False
+    return pages
 
 
 def extract_images_from_pdf(pdf_path, output_folder):
-    doc = fitz.open(pdf_path)
     os.makedirs(output_folder, exist_ok=True)
 
     image_paths = []
 
-    for page_index in range(len(doc)):
-        page = doc[page_index]
-        images = page.get_images(full=True)
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_index, page in enumerate(pdf.pages):
 
-        for img_index, img in enumerate(images):
-            xref = img[0]
-            base_image = doc.extract_image(xref)
-
-            image_bytes = base_image["image"]
-            ext = base_image["ext"]
-
-            # ✅ APPLY FILTER
-            if not is_valid_image(image_bytes):
+            if not page.images:
                 continue
 
-            image_name = f"page{page_index+1}_img{img_index+1}.{ext}"
-            image_path = os.path.join(output_folder, image_name)
+            for img_index, img in enumerate(page.images):
 
-            with open(image_path, "wb") as f:
-                f.write(image_bytes)
+                try:
+                    x0, top, x1, bottom = (
+                        img["x0"], img["top"], img["x1"], img["bottom"]
+                    )
 
-            image_paths.append(image_path)
+                    cropped = page.crop((x0, top, x1, bottom)).to_image()
+
+                    img_bytes = cropped.original
+
+                    # Convert to PIL
+                    pil_img = Image.open(io.BytesIO(img_bytes))
+
+                    width, height = pil_img.size
+
+                    # ✅ FILTER small icons
+                    if width < 200 or height < 200:
+                        continue
+
+                    image_name = f"page{page_index+1}_img{img_index+1}.png"
+                    image_path = os.path.join(output_folder, image_name)
+
+                    pil_img.save(image_path)
+
+                    image_paths.append(image_path)
+
+                except Exception:
+                    continue
 
     return image_paths
-
-
-def extract_text_by_page(pdf_path):
-    doc = fitz.open(pdf_path)
-
-    pages = []
-    for i, page in enumerate(doc):
-        pages.append({
-            "page": i + 1,
-            "text": page.get_text()
-        })
-
-    return pages
