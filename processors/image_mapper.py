@@ -15,68 +15,42 @@ class ImageMapper:
         with open(thermal_path) as f:
             self.thermal = json.load(f)
 
-    # ✅ Distribute inspection images area-wise
-    def map_inspection_images(self):
-
-        images = self.inspection.get("images", [])
-        areas = self.merged
-
-        mapping = {area["area"]: [] for area in areas}
-
-        if not images:
-            return mapping
-
-        per_area = max(1, len(images) // len(areas))
-
-        for i, area in enumerate(areas):
-            start = i * per_area
-            end = (i + 1) * per_area if i < len(areas) - 1 else len(images)
-
-            mapping[area["area"]] = images[start:end]
-
-        return mapping
-
-    # ✅ Distribute thermal images area-wise
-    def map_thermal_images(self):
-
-        thermal_data = self.thermal.get("thermal_data", [])
-        areas = self.merged
-
-        mapping = {area["area"]: [] for area in areas}
-
-        if not thermal_data:
-            return mapping
-
-        per_area = max(1, len(thermal_data) // len(areas))
-
-        for i, area in enumerate(areas):
-            start = i * per_area
-            end = (i + 1) * per_area if i < len(areas) - 1 else len(thermal_data)
-
-            imgs = []
-            for item in thermal_data[start:end]:
-                if "image" in item:
-                    imgs.append(item["image"])
-
-            mapping[area["area"]] = imgs
-
-        return mapping
-
     def run(self, output_path):
 
-        inspection_map = self.map_inspection_images()
-        thermal_map = self.map_thermal_images()
+        inspection_images = self.inspection.get("images", [])
+        thermal_images = self.thermal.get("images", [])
 
-        # ✅ Attach images to merged data
-        for area in self.merged:
-            name = area["area"]
+        areas = self.merged
 
-            area["inspection_images"] = inspection_map.get(name, [])
-            area["thermal_images"] = thermal_map.get(name, [])
+        total_areas = len(areas)
 
+        # 🔥 DISTRIBUTE IMAGES EVENLY
+        def split_images(images):
+            if not images:
+                return [[] for _ in range(total_areas)]
+
+            chunk_size = max(1, len(images) // total_areas)
+
+            chunks = []
+            for i in range(total_areas):
+                start = i * chunk_size
+                end = (i + 1) * chunk_size if i < total_areas - 1 else len(images)
+                chunks.append(images[start:end])
+
+            return chunks
+
+        insp_chunks = split_images(inspection_images)
+        therm_chunks = split_images(thermal_images)
+
+        # 🔥 ASSIGN TO AREAS
+        for i, area in enumerate(areas):
+            area["inspection_images"] = insp_chunks[i]
+            area["thermal_images"] = therm_chunks[i]
+
+        # SAVE
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         with open(output_path, "w") as f:
-            json.dump(self.merged, f, indent=4)
+            json.dump(areas, f, indent=4)
 
-        print("✅ Image mapping completed")
+        print("✅ Images mapped to areas")
