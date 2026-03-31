@@ -50,7 +50,8 @@ def extract_images_from_pdf(pdf_path, output_folder):
                         continue
 
                     image_name = f"page{page_index+1}_img{img_index+1}.png"
-                    image_path = os.path.join(output_folder, image_name)
+                
+                    image_path = os.path.abspath(os.path.join(output_folder, image_name))
 
                     pil_img.save(image_path)
 
