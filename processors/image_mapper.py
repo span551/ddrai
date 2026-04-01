@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 
 class ImageMapper:
@@ -15,42 +16,56 @@ class ImageMapper:
         with open(thermal_path) as f:
             self.thermal = json.load(f)
 
+    def extract_page_number(self, img_path):
+        match = re.search(r'page_(\d+)', img_path)
+        return int(match.group(1)) if match else None
+
     def run(self, output_path):
 
         inspection_images = self.inspection.get("images", [])
         thermal_images = self.thermal.get("images", [])
 
-        areas = self.merged
+        inspection_pages = self.inspection.get("pages", [])
+        thermal_pages = self.thermal.get("pages", [])
 
-        total_areas = len(areas)
+        for area in self.merged:
 
-        # 🔥 DISTRIBUTE IMAGES EVENLY
-        def split_images(images):
-            if not images:
-                return [[] for _ in range(total_areas)]
+            area_name = area["area"].lower()
 
-            chunk_size = max(1, len(images) // total_areas)
+            area["inspection_images"] = []
+            area["thermal_images"] = []
 
-            chunks = []
-            for i in range(total_areas):
-                start = i * chunk_size
-                end = (i + 1) * chunk_size if i < total_areas - 1 else len(images)
-                chunks.append(images[start:end])
+            # 🔥 MATCH INSPECTION IMAGES
+            for img in inspection_images:
+                page_num = self.extract_page_number(img)
 
-            return chunks
+                if page_num and page_num <= len(inspection_pages):
+                    page_text = inspection_pages[page_num - 1]["text"].lower()
 
-        insp_chunks = split_images(inspection_images)
-        therm_chunks = split_images(thermal_images)
+                    if area_name in page_text:
+                        area["inspection_images"].append(img)
 
-        # 🔥 ASSIGN TO AREAS
-        for i, area in enumerate(areas):
-            area["inspection_images"] = insp_chunks[i]
-            area["thermal_images"] = therm_chunks[i]
+            # 🔥 MATCH THERMAL IMAGES
+            for img in thermal_images:
+                page_num = self.extract_page_number(img)
+
+                if page_num and page_num <= len(thermal_pages):
+                    page_text = thermal_pages[page_num - 1]["text"].lower()
+
+                    if area_name in page_text:
+                        area["thermal_images"].append(img)
+
+            # 🚨 FALLBACK (if nothing found)
+            if not area["inspection_images"]:
+                area["inspection_images"] = inspection_images[:2]
+
+            if not area["thermal_images"]:
+                area["thermal_images"] = thermal_images[:2]
 
         # SAVE
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         with open(output_path, "w") as f:
-            json.dump(areas, f, indent=4)
+            json.dump(self.merged, f, indent=4)
 
-        print("✅ Images mapped to areas")
+        print("✅ Smart image mapping completed")
