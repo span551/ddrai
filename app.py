@@ -19,40 +19,47 @@ inspection_file = st.file_uploader("Upload Inspection Report", type=["pdf"])
 thermal_file = st.file_uploader("Upload Thermal Report", type=["pdf"])
 
 
+# 🔥 DEBUG TOGGLE (clean UI by default)
+debug_mode = st.checkbox("Show Debug Data (for developer use)")
+
+
 if st.button("Generate DDR Report"):
 
     if not inspection_file or not thermal_file:
         st.error("Please upload both files")
         st.stop()
 
-    with tempfile.TemporaryDirectory() as temp_dir:
+    # ⚠️ Use fixed folder (not temp) for reliability in Streamlit
+    temp_dir = "temp_data"
+    os.makedirs(temp_dir, exist_ok=True)
 
-        input_dir = os.path.join(temp_dir, "input")
-        os.makedirs(input_dir)
+    input_dir = os.path.join(temp_dir, "input")
+    os.makedirs(input_dir, exist_ok=True)
 
-        inspection_path = os.path.join(input_dir, "inspection.pdf")
-        thermal_path = os.path.join(input_dir, "thermal.pdf")
+    inspection_path = os.path.join(input_dir, "inspection.pdf")
+    thermal_path = os.path.join(input_dir, "thermal.pdf")
 
-        with open(inspection_path, "wb") as f:
-            f.write(inspection_file.read())
+    with open(inspection_path, "wb") as f:
+        f.write(inspection_file.read())
 
-        with open(thermal_path, "wb") as f:
-            f.write(thermal_file.read())
+    with open(thermal_path, "wb") as f:
+        f.write(thermal_file.read())
 
-        st.info("🔍 Running extraction...")
+    st.info("🔍 Running extraction...")
 
-        # =========================
-        # STEP 1 — EXTRACTION
-        # =========================
-        insp = InspectionExtractor(inspection_path)
-        insp.run(os.path.join(temp_dir, "inspection"))
+    # =========================
+    # STEP 1 — EXTRACTION
+    # =========================
+    insp = InspectionExtractor(inspection_path)
+    insp.run(os.path.join(temp_dir, "inspection"))
 
-        therm = ThermalExtractor(thermal_path)
-        therm.run(os.path.join(temp_dir, "thermal"))
+    therm = ThermalExtractor(thermal_path)
+    therm.run(os.path.join(temp_dir, "thermal"))
 
-        # =========================
-        # 🔥 DEBUG STEP 2 — VERIFY IMAGES
-        # =========================
+    # =========================
+    # 🔍 DEBUG — EXTRACTION
+    # =========================
+    if debug_mode:
         st.subheader("🔍 Debug: Extracted Data")
 
         try:
@@ -67,37 +74,40 @@ if st.button("Generate DDR Report"):
         except Exception as e:
             st.error(f"Error reading JSON: {e}")
 
-        # =========================
-        # STEP 2 — MERGE
-        # =========================
-        merger = DataMergerValidator(
-            os.path.join(temp_dir, "inspection/inspection_data.json"),
-            os.path.join(temp_dir, "thermal/thermal_data.json")
-        )
-        merger.run(os.path.join(temp_dir, "merged.json"))
+    # =========================
+    # STEP 2 — MERGE
+    # =========================
+    merger = DataMergerValidator(
+        os.path.join(temp_dir, "inspection/inspection_data.json"),
+        os.path.join(temp_dir, "thermal/thermal_data.json")
+    )
+    merger.run(os.path.join(temp_dir, "merged.json"))
 
-        # =========================
-        # STEP 3 — LLM
-        # =========================
-        api_key = st.secrets["GROQ_API_KEY"]
+    # =========================
+    # STEP 3 — LLM
+    # =========================
+    api_key = st.secrets["GROQ_API_KEY"]
 
-        generator = DDRGenerator(api_key)
-        generator.generate(
-            os.path.join(temp_dir, "merged.json"),
-            os.path.join(temp_dir, "llm.json")
-        )
+    generator = DDRGenerator(api_key)
+    generator.generate(
+        os.path.join(temp_dir, "merged.json"),
+        os.path.join(temp_dir, "llm.json")
+    )
 
-        # =========================
-        # STEP 4 — IMAGE MAPPING
-        # =========================
-        mapper = ImageMapper(
-            os.path.join(temp_dir, "merged.json"),
-            os.path.join(temp_dir, "inspection/inspection_data.json"),
-            os.path.join(temp_dir, "thermal/thermal_data.json")
-        )
-        mapper.run(os.path.join(temp_dir, "final.json"))
+    # =========================
+    # STEP 4 — IMAGE MAPPING
+    # =========================
+    mapper = ImageMapper(
+        os.path.join(temp_dir, "merged.json"),
+        os.path.join(temp_dir, "inspection/inspection_data.json"),
+        os.path.join(temp_dir, "thermal/thermal_data.json")
+    )
+    mapper.run(os.path.join(temp_dir, "final.json"))
 
-        # 🔥 DEBUG FINAL JSON
+    # =========================
+    # 🔍 DEBUG — FINAL JSON
+    # =========================
+    if debug_mode:
         st.subheader("🧠 Debug: Final Mapped Data")
 
         try:
@@ -107,22 +117,22 @@ if st.button("Generate DDR Report"):
         except Exception as e:
             st.error(f"Error reading final JSON: {e}")
 
-        # =========================
-        # STEP 5 — DOCX
-        # =========================
-        output_doc = os.path.join(temp_dir, "DDR_Report.docx")
+    # =========================
+    # STEP 5 — DOCX GENERATION
+    # =========================
+    output_doc = os.path.join(temp_dir, "DDR_Report.docx")
 
-        builder = DDRReportBuilder(
-            os.path.join(temp_dir, "final.json"),
-            os.path.join(temp_dir, "llm.json")
+    builder = DDRReportBuilder(
+        os.path.join(temp_dir, "final.json"),
+        os.path.join(temp_dir, "llm.json")
+    )
+    builder.build(output_doc)
+
+    st.success("✅ DDR Generated!")
+
+    with open(output_doc, "rb") as f:
+        st.download_button(
+            "📥 Download DDR Report",
+            f,
+            file_name="DDR_Report.docx"
         )
-        builder.build(output_doc)
-
-        st.success("✅ DDR Generated!")
-
-        with open(output_doc, "rb") as f:
-            st.download_button(
-                "📥 Download DDR Report",
-                f,
-                file_name="DDR_Report.docx"
-            )
