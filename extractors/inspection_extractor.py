@@ -1,4 +1,3 @@
-import re
 import json
 import os
 from utils.pdf_utils import extract_images_from_pdf, extract_text_by_page
@@ -6,72 +5,35 @@ from utils.pdf_utils import extract_images_from_pdf, extract_text_by_page
 
 class InspectionExtractor:
 
-    def __init__(self, pdf_path):
+    def __init__(self, pdf_path, output_dir):
         self.pdf_path = pdf_path
-        self.pages = extract_text_by_page(pdf_path)
+        self.output_dir = output_dir
 
-    def get_full_text(self):
-        return "\n".join([p["text"] for p in self.pages])
+    def extract(self):
 
-    def extract_impacted_areas(self, text):
-        areas = []
+        print("🔍 Extracting Inspection Report...")
 
-        pattern = r"Impacted Area (\d+)(.*?)(?=Impacted Area \d+|SUMMARY TABLE)"
-        matches = re.findall(pattern, text, re.DOTALL)
+        pages = extract_text_by_page(self.pdf_path)
 
-        for num, content in matches:
-            area_data = {
-                "area_id": int(num),
-                "negative": None,
-                "positive": None
-            }
+        image_folder = os.path.join(self.output_dir, "images")
 
-            neg_match = re.search(r"Negative side Description(.*?)(Photo|Positive)", content, re.DOTALL)
-            pos_match = re.search(r"Positive side Description(.*?)(Photo)", content, re.DOTALL)
-
-            if neg_match:
-                area_data["negative"] = neg_match.group(1).strip()
-
-            if pos_match:
-                area_data["positive"] = pos_match.group(1).strip()
-
-            areas.append(area_data)
-
-        return areas
-
-    def extract_summary(self, text):
-        summary = []
-
-        pattern = r"\d+\s+Observed(.*?)\n"
-        matches = re.findall(pattern, text)
-
-        for m in matches:
-            summary.append(m.strip())
-
-        return summary
-
-    def run(self, output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-
-        text = self.get_full_text()
-
-        data = {
-            "impacted_areas": self.extract_impacted_areas(text),
-            "summary": self.extract_summary(text)
-        }
-
-        # Extract images
-        image_paths = extract_images_from_pdf(
+        images = extract_images_from_pdf(
             self.pdf_path,
-            os.path.join(output_dir, "images")
+            image_folder,
+            min_size=200,
+            max_images=80
         )
 
-        data["images"] = image_paths
+        data = {
+            "pages": pages,
+            "images": images
+        }
 
-        # Save JSON
-        with open(os.path.join(output_dir, "inspection_data.json"), "w") as f:
+        output_path = os.path.join(self.output_dir, "inspection.json")
+
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=4)
 
         print("✅ Inspection extraction complete")
 
-        return data
+        return output_path
