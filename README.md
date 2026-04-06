@@ -113,7 +113,7 @@ ai-ddr-system/
 ### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/your-username/ai-ddr-system.git
+git clone https://github.com/span551/ai-ddr-system.git
 cd ai-ddr-system
 ```
 
