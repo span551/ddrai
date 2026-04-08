@@ -214,7 +214,7 @@ The generated report includes:
 ## 👨‍💻 Author
 
 Your Name
-GitHub: https://github.com/your-username
+GitHub: https://github.com/span551/ddrai/tree/main
 
 ---
 
