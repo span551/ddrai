@@ -1,5 +1,6 @@
 import fitz  # PyMuPDF
 import os
+import pymupdf as fitz
 import hashlib
 import pdfplumber
 
